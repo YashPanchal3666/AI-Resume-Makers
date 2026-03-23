@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyLine Pro | AI Resume Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --accent: #1e293b;
+            --bg: #f1f5f9;
+            --glass: rgba(255, 255, 255, 0.95);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg); overflow: hidden; }
+
+        /* --- Intro Splash --- */
+        #splash-screen {
+            position: fixed; inset: 0; background: #0f172a; z-index: 10000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .skyline-logo {
+            font-family: 'Playfair Display', serif; font-size: 5rem;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            animation: slideUp 1s ease;
+        }
+        @keyframes slideUp { from { opacity:0; transform: translateY(30px); } to { opacity:1; transform: translateY(0); } }
+
+        /* --- Main App Container --- */
+        .app-hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+        .main-app {
+            display: grid;
+            grid-template-columns: 400px 1fr 300px;
+            height: 100vh;
+            transition: opacity 0.5s ease;
+        }
+
+        /* Responsive Logic */
+        @media (max-width: 1200px) { .main-app { grid-template-columns: 350px 1fr; } .template-panel { display: none; } }
+        @media (max-width: 900px) {
+            .main-app { grid-template-columns: 1fr; overflow-y: auto; height: auto; }
+            .editor-panel { height: auto; border-right: none; }
+            .preview-area { padding: 15px; }
+            .resume-container { transform: scale(0.45); transform-origin: top center; width: 210mm; margin-bottom: -400px; }
+            .template-panel { display: none; }
+        }
+
+        /* --- Editor Sidebar --- */
+        .editor-panel { background: white; padding: 25px; overflow-y: auto; border-right: 1px solid #e2e8f0; z-index: 10; }
+        .section-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 12px; margin-bottom: 20px; }
+        h3 { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--primary); margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        
+        .input-group { margin-bottom: 12px; }
+        label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; display: block; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem; transition: border 0.3s; }
+        input:focus { border-color: var(--primary); outline: none; background: #fff; }
+
+        .btn-ai { background: #0f172a; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; transition: 0.3s; margin-top: 10px; }
+        .btn-ai:hover { background: var(--primary); }
+
+        /* --- Preview Area --- */
+        .preview-area { background: #cbd5e1; padding: 40px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; position: relative; }
+        .toolbar { width: 100%; max-width: 210mm; background: var(--glass); backdrop-filter: blur(10px); padding: 15px; border-radius: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+
+        /* --- Resume Render Styles --- */
+        #resume-render {
+            width: 210mm; min-height: 297mm; background: white; position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); transform-origin: top center;
+        }
+
+        /* LAYOUT ENGINES */
+        .t-sidebar { display: grid; grid-template-columns: 280px 1fr; }
+        .t-sidebar .side { background: var(--accent); color: white; padding: 40px 30px; }
+        .t-sidebar .main { padding: 40px; color: #334155; }
+
+        .t-modern { display: block; }
+        .t-modern .head { padding: 50px; background: #fff; border-bottom: 10px solid var(--accent); display: flex; align-items: center; gap: 40px; }
+        .t-modern .body { padding: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+
+        .t-grid { display: block; padding: 50px; }
+        .t-grid .head { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 30px; margin-bottom: 30px; }
+
+        /* Components */
+        .res-img { width: 140px; height: 140px; border-radius: 12px; object-fit: cover; border: 4px solid white; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .res-name { font-size: 2.8rem; font-weight: 800; color: inherit; line-height: 1.1; margin-bottom: 5px; text-transform: uppercase; }
+        .res-title { font-size: 1.2rem; color: var(--primary); font-weight: 600; margin-bottom: 20px; }
+        .res-section-h { font-size: 1rem; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 25px 0 15px; display: flex; align-items: center; gap: 10px; }
+        .edu-item { margin-bottom: 15px; }
+        .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag { background: #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+
+        /* --- Right Sidebar --- */
+        .template-panel { background: white; padding: 20px; border-left: 1px solid #e2e8f0; overflow-y: auto; }
+        .temp-card { border: 2px solid #f1f5f9; border-radius: 12px; cursor: pointer; padding: 15px; margin-bottom: 12px; transition: 0.3s; text-align: center; }
+        .temp-card:hover, .temp-card.active { border-color: var(--primary); background: #f5f7ff; transform: scale(1.02); }
+        .color-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: inline-block; margin: 0 5px; border: 2px solid white; box-shadow: 0 0 0 1px #ddd; }
+    </style>
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="skyline-logo">SkyLine</div>
+        <p style="color: #94a3b8; letter-spacing: 5px; font-weight: 300; margin-bottom: 30px;">AI POWERED PROFESSIONAL SUITE</p>
+        <button class="btn-ai" onclick="startApp()" style="width: 200px;">Launch Builder</button>
+    </div>
+
+    <div id="main-app" class="main-app app-hidden">
+        <aside class="editor-panel">
+            <h2 style="margin-bottom: 20px;"><i class="fas fa-magic"></i> AI Content</h2>
+            
+            <div class="section-card">
+                <h3><i class="fas fa-user"></i> Basics</h3>
+                <div class="input-group"><label>Profile Image</label><input type="file" onchange="loadImg(event)"></div>
+                <input type="text" id="in-name" placeholder="Full Name" oninput="render()">
+                <input type="text" id="in-title" placeholder="Job Title / Role" oninput="render()">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <input type="text" id="in-email" placeholder="Email" oninput="render()">
+                    <input type="text" id="in-phone" placeholder="Phone" oninput="render()">
+                </div>
+                <input type="text" id="in-loc" placeholder="Location (City, Country)" oninput="render()">
+            </div>
+
+            <div class="section-card">
+                <h3><i class="fas fa-graduation-cap"></i> Academic Marks</h3>
+                <label>College / Degree Details</label>
+                <input type="text" id="in-deg" placeholder="Degree Name" oninput="render()">
+                <input type="text" id="in-uni" placeholder="College/University" oninput="render()">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <input type="text" id="in-cgp" placeholder="CGPA/Percentage" oninput="render()">
+                    <input type="text" id="in-cpass" placeholder="Passing Year" oninput="render()">
+                </div>
+                <hr style="margin: 15px 0; opacity: 0.2;">
+                <label>Higher Secondary (12th)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <input type="text" id="in-12m" placeholder="Percentage" oninput="render()">
+                    <input type="text" id="in-12y" placeholder="Year" oninput="render()">
+                </div>
+                <label style="margin-top:10px;">Secondary (10th)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <input type="text" id="in-10m" placeholder="Percentage" oninput="render()">
+                    <input type="text" id="in-10y" placeholder="Year" oninput="render()">
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h3><i class="fas fa-project-diagram"></i> Projects & Experience</h3>
+                <textarea id="in-proj" rows="3" placeholder="Projects (Title - Description)" oninput="render()"></textarea>
+                <textarea id="in-exp" rows="3" placeholder="Internships/Work experience" oninput="render()" style="margin-top:10px;"></textarea>
+            </div>
+
+            <div class="section-card">
+                <h3><i class="fas fa-award"></i> Achievements</h3>
+                <textarea id="in-ach" rows="3" placeholder="School/College Achievements..." oninput="render()"></textarea>
+            </div>
+
+            <div class="section-card">
+                <h3><i class="fas fa-tools"></i> Skills & More</h3>
+                <input type="text" id="in-skills" placeholder="Skills (HTML, CSS, Java...)" oninput="render()">
+                <input type="text" id="in-lang" placeholder="Languages (English, Hindi...)" oninput="render()" style="margin-top:10px;">
+            </div>
+        </aside>
+
+        <main class="preview-area">
+            <div class="toolbar">
+                <div class="colors">
+                    <span class="color-dot" style="background: #1e293b;" onclick="setAcc('#1e293b')"></span>
+                    <span class="color-dot" style="background: #4f46e5;" onclick="setAcc('#4f46e5')"></span>
+                    <span class="color-dot" style="background: #059669;" onclick="setAcc('#059669')"></span>
+                    <span class="color-dot" style="background: #dc2626;" onclick="setAcc('#dc2626')"></span>
+                </div>
+                <button class="btn-ai" style="width: auto; margin: 0; padding: 10px 25px;" onclick="download()">
+                    <i class="fas fa-file-pdf"></i> Download Resume
+                </button>
+            </div>
+
+            <div id="resume-render" class="t-sidebar">
+                </div>
+        </main>
+
+        <aside class="template-panel">
+            <h2 style="margin-bottom: 20px;">26 Layouts</h2>
+            <div id="temp-grid"></div>
+        </aside>
+    </div>
+
+    <script>
+        let currentLayout = 't-sidebar';
+        let imgData = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
+
+        function startApp() {
+            const splash = document.getElementById('splash-screen');
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+                document.getElementById('main-app').classList.remove('app-hidden');
+                buildTemplateList();
+                render();
+            }, 800);
+        }
+
+        function buildTemplateList() {
+            const grid = document.getElementById('temp-grid');
+            const types = ['t-sidebar', 't-modern', 't-grid'];
+            for(let i=1; i<=26; i++) {
+                const type = types[i % 3];
+                const card = document.createElement('div');
+                card.className = `temp-card ${i===1 ? 'active' : ''}`;
+                card.innerHTML = `<strong>Professional #${i}</strong><br><small>${type.split('-')[1].toUpperCase()}</small>`;
+                card.onclick = () => {
+                    document.querySelectorAll('.temp-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    currentLayout = type;
+                    render();
+                };
+                grid.appendChild(card);
+            }
+        }
+
+        function loadImg(e) {
+            const reader = new FileReader();
+            reader.onload = () => { imgData = reader.result; render(); };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+
+        function setAcc(c) {
+            document.documentElement.style.setProperty('--accent', c);
+            render();
+        }
+
+        function render() {
+            const data = {
+                name: document.getElementById('in-name').value || "Johan",
+                title: document.getElementById('in-title').value || "BCA Student Computer Application",
+                email: document.getElementById('in-email').value || "johan@email.com",
+                phone: document.getElementById('in-phone').value || "9876543210",
+                loc: document.getElementById('in-loc').value || "New York",
+                deg: document.getElementById('in-deg').value || "Bachelor of Computer Applications",
+                uni: document.getElementById('in-uni').value || "New York University",
+                cgp: document.getElementById('in-cgp').value || "8.5 CGPA",
+                cpass: document.getElementById('in-cpass').value || "2026",
+                m12: document.getElementById('in-12m').value || "82%",
+                y12: document.getElementById('in-12y').value || "2023",
+                m10: document.getElementById('in-10m').value || "85%",
+                y10: document.getElementById('in-10y').value || "2021",
+                proj: document.getElementById('in-proj').value || "Weather App - Python project with API integration.",
+                exp: document.getElementById('in-exp').value || "Web Intern at ABC Tech - Built UI components.",
+                ach: document.getElementById('in-ach').value || "Winner of College Hackathon 2025.",
+                skills: document.getElementById('in-skills').value.split(','),
+                lang: document.getElementById('in-lang').value || "English"
+            };
+
+            const target = document.getElementById('resume-render');
+            target.className = currentLayout;
+
+            let html = '';
+
+            if(currentLayout === 't-sidebar') {
+                html = `
+                    <div class="side">
+                        <img src="${imgData}" class="res-img">
+                        <div class="res-section-h" style="color:white; border-color:rgba(255,255,255,0.2)">Contact</div>
+                        <p style="font-size:0.8rem; margin-bottom:5px"><i class="fas fa-envelope"></i> ${data.email}</p>
+                        <p style="font-size:0.8rem; margin-bottom:5px"><i class="fas fa-phone"></i> ${data.phone}</p>
+                        <p style="font-size:0.8rem;"><i class="fas fa-map-marker-alt"></i> ${data.loc}</p>
+                        
+                        <div class="res-section-h" style="color:white; border-color:rgba(255,255,255,0.2)">Skills</div>
+                        <div class="tag-container">${data.skills.map(s => s ? `<span class="tag" style="background:rgba(255,255,255,0.1); color:white">${s.trim()}</span>` : '').join('')}</div>
+                        
+                        <div class="res-section-h" style="color:white; border-color:rgba(255,255,255,0.2)">Languages</div>
+                        <p style="font-size:0.8rem;">${data.lang}</p>
+                    </div>
+                    <div class="main">
+                        <h1 class="res-name" style="color:var(--accent)">${data.name}</h1>
+                        <p class="res-title">${data.title}</p>
+                        
+                        <div class="res-section-h">Education</div>
+                        <div class="edu-item">
+                            <strong>${data.deg}</strong><br>
+                            <span>${data.uni} | ${data.cpass}</span><br>
+                            <span style="color:var(--primary); font-weight:700">Result: ${data.cgp}</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.85rem;">
+                            <div><strong>12th:</strong> ${data.m12} (${data.y12})</div>
+                            <div><strong>10th:</strong> ${data.m10} (${data.y10})</div>
+                        </div>
+
+                        <div class="res-section-h">Experience & Projects</div>
+                        <p style="white-space:pre-line; font-size:0.9rem;">${data.exp}\n\n${data.proj}</p>
+
+                        <div class="res-section-h">Achievements</div>
+                        <p style="white-space:pre-line; font-size:0.9rem;">${data.ach}</p>
+                    </div>
+                `;
+            } else if (currentLayout === 't-modern') {
+                html = `
+                    <div class="head">
+                        <img src="${imgData}" class="res-img" style="border-radius:50%">
+                        <div>
+                            <h1 class="res-name">${data.name}</h1>
+                            <p class="res-title">${data.title}</p>
+                            <p>${data.email} | ${data.phone} | ${data.loc}</p>
+                        </div>
+                    </div>
+                    <div class="body">
+                        <div>
+                            <div class="res-section-h">Education</div>
+                            <p><strong>${data.deg}</strong></p>
+                            <p>${data.uni} (${data.cpass}) - ${data.cgp}</p>
+                            <p style="margin-top:10px">12th Grade: ${data.m12}</p>
+                            <p>10th Grade: ${data.m10}</p>
+                        </div>
+                        <div>
+                            <div class="res-section-h">Technical Skills</div>
+                            <div class="tag-container">${data.skills.map(s => `<span class="tag">${s.trim()}</span>`).join('')}</div>
+                            <div class="res-section-h">Portfolio</div>
+                            <p style="font-size:0.9rem">${data.proj}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html = `
+                    <div class="t-grid">
+                        <div class="head">
+                            <h1 class="res-name" style="color:var(--accent)">${data.name}</h1>
+                            <p>${data.title}</p>
+                            <small>${data.email} • ${data.phone} • ${data.loc}</small>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
+                            <div>
+                                <div class="res-section-h">Work & Experience</div>
+                                <p style="font-size:0.9rem">${data.exp}</p>
+                                <div class="res-section-h">Projects</div>
+                                <p style="font-size:0.9rem">${data.proj}</p>
+                            </div>
+                            <div>
+                                <div class="res-section-h">Academic Timeline</div>
+                                <p><strong>University:</strong> ${data.cgp} (${data.cpass})</p>
+                                <p><strong>Higher Sec:</strong> ${data.m12}</p>
+                                <div class="res-section-h">Excellence</div>
+                                <p style="font-size:0.9rem">${data.ach}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            target.innerHTML = html;
+        }
+
+        function download() {
+            const element = document.getElementById('resume-render');
+            html2pdf().from(element).set({
+                margin: 0,
+                filename: 'SkyLine_Resume.pdf',
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).save();
+        }
+    </script>
+</body>
+</html>
